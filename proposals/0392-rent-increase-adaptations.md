@@ -227,6 +227,53 @@ If the new delegation amount is 0, then `delegation.deactivation_epoch`
 (absolute offset `[172,180)`) MUST be set to the rewarded epoch, expressed as a
 little-endian unsigned 64-bit integer.
 
+Note that only stake accounts included in partitioned epoch rewards are updated.
+Changes in inclusion criteria are outlined in the [unrewarded stake accounts
+section](#unrewarded-stake-accounts-included-in-partitioned-epoch-rewards).
+
+#### Adjustment edge cases
+
+Given a new rent-exempt minimum `R`, increased at the epoch boundary, here are
+the possible outcomes for delegation amounts after distribution. "Rewarded"
+means any stake account that receives inflation rewards, and "capped" refers to
+a stake account whose delegation increase is capped to its previous delegation
+plus inflation rewards (additional lamports are not included in the delegation
+increase).
+
+NOTE: delegation values are bounded by the total lamports in the account, and
+cannot ever be greater.
+
+<!-- markdownlint-disable MD013 -->
+| Description | Total lamports before | Delegation before | Inflation reward | Extra lamports | Total lamports after | Delegation after |
+| --- | --- | --- | --- | --- | --- | --- |
+| Exempt, rewarded | R + X | X > 0 | Y > 0 | 0 | R + X + Y | X + Y |
+| Exempt, capped | R + X | X > 0 | Y > 0 | Z > 0 | R + X + Y + Z | X + Y |
+| Not adjusted, extra lamports cover rent difference | R | X > 0 | 0 | X | R + X | X |
+| Not adjusted, lamports cover rent difference, with inflation | R | X > 0 | Y > 0 | X | R + X + Y | X + Y |
+| *NEW* Deactivated, rent-exempt after distribution | R | X > 0 | 0 | 0 | R | 0 |
+| *NEW* Deactivated, not rent-exempt after distribution | X < R | Y > 0 | 0 | 0 | X | 0 |
+| *NEW* Adjusted, inflation covers rent difference | R | X > 0 | R - X | 0 | R + X | X |
+| *NEW* Adjusted, inflation partially covers rent difference | X < R | Y > R - X - Z | R - X > Z > 0 | 0 | X + Z | X + Z - R |
+<!-- markdownlint-restore -->
+
+#### Unrewarded stake accounts included in partitioned epoch rewards
+
+If a stake account does not receive rewards, but requires a delegation
+adjustment during the calculation phase, it MUST be included as a reward
+recipient during partitioned epoch rewards.
+
+If one of these stake accounts is credited enough lamports between calculation
+and distribution to meet the new rent-exempt minimum, no adjustment takes place.
+
+This table summarizes how to include stake accounts if rent is increased:
+
+| Meets new rent-exempt minimum | Receives rewards | Outcome |
+| --- | --- | --- |
+| Yes | Yes | Included, delegation increased by inflation reward amount |
+| Yes | No | Not included, not adjusted |
+| No | Yes | Included, may be adjusted at distribution |
+| No | No | *NEW* Included, may be adjusted at distribution |
+
 ## Alternatives Considered
 
 ### Always enforce current rent price post-execution
